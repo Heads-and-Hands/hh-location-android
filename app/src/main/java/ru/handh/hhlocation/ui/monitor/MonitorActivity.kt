@@ -8,7 +8,7 @@ import kotlinx.android.synthetic.main.activity_monitor.*
 import ru.handh.hhlocation.R
 import ru.handh.hhlocation.ui.home.HomeActivity
 
-class MonitorActivity: AppCompatActivity() {
+class MonitorActivity : AppCompatActivity() {
 
     companion object {
         fun createStartIntent(context: Context): Intent {

@@ -14,8 +14,7 @@ import ru.handh.hhlocation.R
 import ru.handh.hhlocation.ui.home.HomeActivity
 
 
-
-class BeaconsLurkerService: Service(), BeaconConsumer {
+class BeaconsLurkerService : Service(), BeaconConsumer {
 
     private lateinit var beaconManager: BeaconManager
 

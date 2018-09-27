@@ -8,7 +8,8 @@ class DatabaseHelper {
     companion object {
         const val DB_NAME = "navi_db"
 
-        @Volatile private var naviDatabase: NaviDatabase? = null
+        @Volatile
+        private var naviDatabase: NaviDatabase? = null
 
         fun getDatabase(context: Context): NaviDatabase? {
             if (naviDatabase == null) {

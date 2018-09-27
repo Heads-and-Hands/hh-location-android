@@ -23,7 +23,7 @@ import ru.handh.hhlocation.ui.common.DeviceUuidFactory
 import ru.handh.hhlocation.ui.monitor.MonitorActivity
 
 
-class HomeActivity: AppCompatActivity() {
+class HomeActivity : AppCompatActivity() {
 
     private var registerDeviceDisposable: Disposable? = null
 

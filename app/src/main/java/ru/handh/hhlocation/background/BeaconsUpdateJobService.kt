@@ -14,7 +14,7 @@ import io.reactivex.schedulers.Schedulers
 import ru.handh.hhlocation.data.local.DatabaseHelper
 import ru.handh.hhlocation.data.remote.repository.RepositoryFactory
 
-class BeaconsUpdateJobService: JobService() {
+class BeaconsUpdateJobService : JobService() {
 
     var getBeaconsDisposable: Disposable? = null
 
@@ -44,7 +44,7 @@ class BeaconsUpdateJobService: JobService() {
     override fun onStartJob(params: JobParameters?): Boolean {
         getBeaconsDisposable?.dispose()
         getBeaconsDisposable = RepositoryFactory.makeBeaconRepository().getBeacons()
-                .doOnSuccess {beacons ->
+                .doOnSuccess { beacons ->
                     val naviDatabase = DatabaseHelper.getDatabase(this)
                     val beaconDao = naviDatabase?.beaconDao()
                     if (beaconDao != null) {
