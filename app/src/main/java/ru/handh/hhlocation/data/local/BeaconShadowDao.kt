@@ -1,25 +1,25 @@
 package ru.handh.hhlocation.data.local
 
-import android.arch.lifecycle.LiveData
 import android.arch.persistence.room.Dao
 import android.arch.persistence.room.Insert
 import android.arch.persistence.room.OnConflictStrategy
 import android.arch.persistence.room.Query
-import ru.handh.hhlocation.data.model.Beacon
+import io.reactivex.Flowable
+import ru.handh.hhlocation.data.model.BeaconShadow
 
 @Dao
-interface BeaconDao {
+interface BeaconShadowDao {
 
     companion object {
         const val TABLE_NAME = "beacon_table"
     }
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    fun insert(beacon: Beacon)
+    fun insert(beaconShadow: BeaconShadow)
 
     @Query("DELETE FROM $TABLE_NAME")
     fun deleteAll()
 
     @Query("SELECT * FROM $TABLE_NAME ORDER BY id ASC")
-    fun getAllBeacons(): List<Beacon>
+    fun getAllBeacons(): Flowable<List<BeaconShadow>>
 }

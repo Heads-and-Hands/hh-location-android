@@ -46,10 +46,10 @@ class BeaconsUpdateJobService : JobService() {
         getBeaconsDisposable = RepositoryFactory.makeBeaconRepository().getBeacons()
                 .doOnSuccess { beacons ->
                     val naviDatabase = DatabaseHelper.getDatabase(this)
-                    val beaconDao = naviDatabase?.beaconDao()
+                    val beaconDao = naviDatabase?.beaconShadowDao()
                     if (beaconDao != null) {
                         beacons.forEach {
-                            beaconDao.insert(beacon = it)
+                            beaconDao.insert(beaconShadow = it)
                         }
                     }
                 }

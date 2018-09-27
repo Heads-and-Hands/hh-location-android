@@ -1,28 +1,53 @@
 package ru.handh.hhlocation.background
 
 import android.app.*
+import android.bluetooth.BluetoothAdapter
 import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
 import android.os.RemoteException
 import android.support.v4.app.NotificationCompat
+import io.reactivex.android.schedulers.AndroidSchedulers
+import io.reactivex.disposables.Disposable
+import io.reactivex.schedulers.Schedulers
 import org.altbeacon.beacon.BeaconConsumer
 import org.altbeacon.beacon.BeaconManager
+import org.altbeacon.beacon.BeaconParser
 import org.altbeacon.beacon.Region
 import ru.handh.hhlocation.R
+import ru.handh.hhlocation.data.local.BeaconPhysicalDao
+import ru.handh.hhlocation.data.local.BeaconShadowDao
+import ru.handh.hhlocation.data.local.DatabaseHelper
+import ru.handh.hhlocation.data.model.BeaconPhysical
+import ru.handh.hhlocation.data.model.BeaconShadow
+import ru.handh.hhlocation.data.remote.repository.PositionRepository
+import ru.handh.hhlocation.data.remote.repository.RepositoryFactory
+import ru.handh.hhlocation.ui.common.DeviceUuidFactory
 import ru.handh.hhlocation.ui.home.HomeActivity
 
 
 class BeaconsLurkerService : Service(), BeaconConsumer {
 
     private lateinit var beaconManager: BeaconManager
+    private var beaconShadowDao: BeaconShadowDao? = null
+    private var beaconPhysicalDao: BeaconPhysicalDao? = null
+
+    private val physicalBeacons = mutableMapOf<String, BeaconPhysical>()
+    private var shadowBeacons = emptyList<BeaconShadow>()
+    private var nearestBeacon: BeaconPhysical? = null
+
+    private var positionRepository: PositionRepository? = null
+    private var checkInDisposable: Disposable? = null
+
+    private var getAllShadowBeaconsFlowable: Disposable? = null
 
     companion object {
         const val NOTIFICATION_ID = 100
         const val NOTIFICATION_CHANNEL_ID = "CHANNEL_ID_FOREGROUND"
 
-        const val REGION_UUID = "FDA50693-A4E2-4FB1-AFCF-C6EB07647825"
+        const val REGION_ID = "ru.handh.hhlocation.android"
+        const val BEACON_UUID = "fda50693-a4e2-4fb1-afcf-c6eb07647825"
 
         fun createStartIntent(context: Context): Intent {
             return Intent(context, BeaconsLurkerService::class.java)
@@ -33,6 +58,27 @@ class BeaconsLurkerService : Service(), BeaconConsumer {
         super.onCreate()
 
         beaconManager = BeaconManager.getInstanceForApplication(this)
+        beaconManager.beaconParsers.add(BeaconParser().setBeaconLayout("m:0-3=4c000215,i:4-19,i:20-21,i:22-23,p:24-24"))
+        beaconManager.setEnableScheduledScanJobs(false)
+        beaconManager.backgroundBetweenScanPeriod = 0
+        beaconManager.backgroundScanPeriod = 6000
+
+        beaconShadowDao = DatabaseHelper.getDatabase(this)?.beaconShadowDao()
+        beaconPhysicalDao = DatabaseHelper.getDatabase(this)?.beaconPhysicalDao()
+
+        positionRepository = RepositoryFactory.positionRepository()
+
+        getAllShadowBeaconsFlowable?.dispose()
+        if (beaconShadowDao != null) {
+            getAllShadowBeaconsFlowable = beaconShadowDao!!.getAllBeacons()
+                    .subscribeOn(Schedulers.io())
+                    .observeOn(AndroidSchedulers.mainThread())
+                    .subscribe({
+                        shadowBeacons = it
+                    }, {
+
+                    })
+        }
 
         startForeground(NOTIFICATION_ID, createForegroundNotification())
 
@@ -41,6 +87,7 @@ class BeaconsLurkerService : Service(), BeaconConsumer {
     override fun onDestroy() {
         BeaconsUpdateJobService.cancel(this)
         beaconManager.unbind(this)
+        getAllShadowBeaconsFlowable?.dispose()
         super.onDestroy()
     }
 
@@ -49,6 +96,10 @@ class BeaconsLurkerService : Service(), BeaconConsumer {
         // At first, add update beacons list task to the schedule
         BeaconsUpdateJobService.schedule(this)
 
+        val bluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
+        if (!bluetoothAdapter.isEnabled) {
+            bluetoothAdapter.enable()
+        }
         beaconManager.bind(this)
 
         return START_STICKY
@@ -60,13 +111,55 @@ class BeaconsLurkerService : Service(), BeaconConsumer {
 
     override fun onBeaconServiceConnect() {
         beaconManager.addRangeNotifier { beacons, region ->
-            beacons.forEach {
-                // ~
+            beacons.forEach { beacon ->
+                val beaconPhysical = BeaconPhysical(
+                        beacon.bluetoothAddress,
+                        beacon.id1.toHexString(),
+                        beacon.id2.toInt().toString(),
+                        beacon.id3.toInt().toString(),
+                        beacon.rssi,
+                        beacon.txPower,
+                        System.currentTimeMillis(),
+                        beacon.distance
+                )
+                // beaconPhysicalDao?.insert(beaconPhysical)
+                physicalBeacons[beaconPhysical.macAddress] = beaconPhysical
+
+                var newNearestBeacon: BeaconPhysical? = null
+                physicalBeacons.forEach {entry ->
+                    if (newNearestBeacon?.distance ?: Double.POSITIVE_INFINITY > entry.value.distance) {
+                        newNearestBeacon = entry.value
+                    }
+                }
+                if (nearestBeacon?.macAddress != newNearestBeacon?.macAddress) {
+                    checkInDisposable?.dispose()
+
+                    val found = shadowBeacons.firstOrNull {
+                        newNearestBeacon?.minor?.toInt() == it.uid
+                    }
+
+                    val positionX = found?.posX ?: 0
+                    val positionY = found?.posY ?: 0
+
+                    if (positionRepository != null) {
+                        checkInDisposable?.dispose()
+                        checkInDisposable = positionRepository!!.checkIn(getLocalDeviceId(), positionX, positionY)
+                                .subscribeOn(Schedulers.io())
+                                .observeOn(AndroidSchedulers.mainThread())
+                                .subscribe({
+
+                                }, {
+
+                                })
+                    }
+
+                    nearestBeacon = newNearestBeacon
+                }
             }
         }
 
         try {
-            beaconManager.startRangingBeaconsInRegion(Region(REGION_UUID, null, null, null))
+            beaconManager.startRangingBeaconsInRegion(Region(REGION_ID, null, null, null))
         } catch (ex: RemoteException) {
 
         }
@@ -100,5 +193,9 @@ class BeaconsLurkerService : Service(), BeaconConsumer {
             }
 
         }
+    }
+
+    private fun getLocalDeviceId(): String {
+        return DeviceUuidFactory(this).deviceUuid?.toString() ?: ""
     }
 }
