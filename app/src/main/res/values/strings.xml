@@ -1,3 +1,11 @@
 <resources>
-    <string name="app_name">HH Location</string>
+    <string name="app_name">H&amp;H Navi</string>
+    <string name="device_id_title">Device ID</string>
+    <string name="device_name_title">Device Title</string>
+    <string name="register_device">Register Device</string>
+    <string name="re_register_device">Re-Register Device</string>
+    <string name="device_successfully_registered">Device successfully registered</string>
+    <string name="menu_monitor">Monitor</string>
+    <string name="monitor_title">Monitor</string>
+    <string name="menu_home">Home</string>
 </resources>
